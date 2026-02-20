@@ -71,7 +71,10 @@ class Arducam(object):
         while not self.i2c.try_lock():
             pass
         try:
-            self.i2c.writeto(self.I2cAddress, bytes([(addr >> 8) & 0xFF, addr & 0xFF]), stop=False)
+            # Step 1: Write the 16-bit address we want to read from
+            self.i2c.writeto(self.I2cAddress, bytes([(addr >> 8) & 0xFF, addr & 0xFF]))
+            
+            # Step 2: Read the 8-bit response
             result = bytearray(1)
             self.i2c.readfrom_into(self.I2cAddress, result)
             return result[0]
