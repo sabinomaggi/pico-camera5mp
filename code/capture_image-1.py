@@ -102,8 +102,8 @@ def capture_image():
             last_byte = byte
 
         if len(img_bytes) > 1000:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"capture_{timestamp}.jpg"
+            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            filename = f"img_{timestamp}.jpg"
             filepath = os.path.join(IMAGE_DIR, filename)
             
             with open(filepath, 'wb') as f:
