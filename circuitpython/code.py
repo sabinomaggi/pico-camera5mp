@@ -4,6 +4,8 @@ import supervisor
 import sys
 from Arducam import Arducam, OV5642_2592x1944, OV5642_1600x1200
 
+import usb_cdc
+
 # Initialize Camera
 cam = Arducam()
 cam.init_cam()
@@ -52,14 +54,35 @@ def stream_image():
     cam.clear_fifo_flag()
 
 # Main Loop
+# Instead of relying on the REPL (sys.stdin) which intercepts raw bytes,
+# we use a secondary hardware UART on the Pico for reliable control.
+# Connect your host to GP0 (TX) and GP1 (RX) via a USB-to-TTL adapter
+# OR use the secondary CDC interface if enabled in boot.py.
+# However, for simplicity without custom boot.py, we will try to use 
+# sys.stdin with a safer decoding approach: expecting a newline.
+# If the host script can send "\n" after the command, it works perfectly.
+
+# Let's try one more approach with sys.stdin: reading a full string.
+print("Listening for 'CAPTURE' command...")
+
 while True:
-    if supervisor.runtime.serial_bytes_available:
-        cmd = sys.stdin.read(1)
-        if cmd == "\x10": # Trigger capture
-            stream_image()
-        elif cmd == "\x11": # Re-init
-            print("ACK CMD Re-initializing Camera... END")
-            cam.init_cam()
-            cam.set_jpeg_size(OV5642_2592x1944)
-            print("ACK CMD Re-init Done. END")
+    # Use select or simpler blocking if supervisor fails
+    import select
+    
+    # Wait for input on stdin
+    r, w, e = select.select([sys.stdin], [], [], 0)
+    if r:
+        try:
+            cmd = sys.stdin.readline().strip()
+            print(f"DEBUG: Received command: '{cmd}'")
+            
+            if cmd == "CAPTURE" or cmd == "\x10": # Trigger capture
+                stream_image()
+            elif cmd == "INIT" or cmd == "\x11": # Re-init
+                print("ACK CMD Re-initializing Camera... END")
+                cam.init_cam()
+                cam.set_jpeg_size(OV5642_2592x1944)
+                print("ACK CMD Re-init Done. END")
+        except Exception as e:
+            print(f"DEBUG Error: {e}")
     time.sleep(0.01)

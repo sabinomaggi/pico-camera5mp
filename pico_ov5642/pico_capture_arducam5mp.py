@@ -10,7 +10,7 @@ SERIAL_PORT = '/dev/cu.usbmodem22401'  # Updated to user's actual port
 BAUD_RATE = 115200
 TIMEOUT = 5  # Serial timeout in seconds
 # GLOBAL SETTINGS
-DEBUG = False  # Set to True to see all Pico diagnostic logs
+DEBUG = True  # Enabled to see Pico diagnostic logs
 
 # Directory configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,8 +45,10 @@ def capture_image():
         # ser.write(b'\x11')
         # time.sleep(2) # Give Pico time to process re-init
 
-        print("Triggering single capture (0x10)...")
-        ser.write(b'\x10')
+        print("Triggering single capture ('CAPTURE\\n')...")
+        # In CircuitPython, the REPL often consumes raw bytes like \x10.
+        # Sending a plaintext string with a newline is much more reliable.
+        ser.write(b'CAPTURE\n')
 
         # Wait for "ACK IMG END" header
         print("Waiting for image stream...")
