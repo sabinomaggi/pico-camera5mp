@@ -45,17 +45,17 @@ The primary objective of this project was to bridge the gap in the official Ardu
 3.  Upload the sketch to your Pico.
 
 ### 2. Changing Resolution
-To change the capture resolution, modify the `myCAM.OV5642_set_JPEG_size()` call in the `setup()` function of `pico_ov5642/pico_ov5642.ino`:
+To change the capture resolution, simply modify the `SELECTED_RESOLUTION` variable at the top of [pico_ov5642/pico_ov5642.ino](pico_ov5642/pico_ov5642.ino):
 
 ```cpp
 // Example: Switch to UXGA (1600x1200)
-myCAM.OV5642_set_JPEG_size(OV5642_1600x1200);
+const int SELECTED_RESOLUTION = OV5642_1600x1200;
 
 // Example: Switch to 5MP (2592x1944)
-myCAM.OV5642_set_JPEG_size(OV5642_2592x1944);
+const int SELECTED_RESOLUTION = OV5642_2592x1944;
 ```
 
-Supported constants in `ArduCAM.h` include:
+Supported constants include:
 - `OV5642_320x240` (QVGA)
 - `OV5642_640x480` (VGA)
 - `OV5642_1024x768` (XGA)

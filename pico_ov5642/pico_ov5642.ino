@@ -6,6 +6,17 @@
 // Debug mode: set to 1 to enable diagnostic prints and scans, 0 to disable
 #define DEBUG_MODE 0
 
+/**
+ * SELECT RESOLUTION
+ * Choose one of the following constants:
+ * OV5642_320x240   - QVGA
+ * OV5642_640x480   - VGA
+ * OV5642_1024x768  - XGA
+ * OV5642_1600x1200 - UXGA
+ * OV5642_2592x1944 - 5MP (Default)
+ */
+const int SELECTED_RESOLUTION = OV5642_2592x1944;
+
 // Pin configuration for Pico 2W as specified by user
 const int CS = 5;
 
@@ -88,7 +99,7 @@ void setup() {
   // Set JPEG format and initialize
   myCAM.set_format(JPEG);
   myCAM.InitCAM();
-  myCAM.OV5642_set_JPEG_size(OV5642_2592x1944);
+  myCAM.OV5642_set_JPEG_size(SELECTED_RESOLUTION);
   myCAM.clear_fifo_flag();
   myCAM.write_reg(ARDUCHIP_FRAMES,
                   0x00); // 0x00 means 1 frame for some versions
@@ -127,7 +138,7 @@ void loop() {
     } else if (temp == 0x11) { // Manual Re-Init
       Serial.println(F("ACK CMD Re-initializing Camera... END"));
       myCAM.InitCAM();
-      myCAM.OV5642_set_JPEG_size(OV5642_2592x1944);
+      myCAM.OV5642_set_JPEG_size(SELECTED_RESOLUTION);
       Serial.println(F("ACK CMD Re-init Done. END"));
     } else {
       Serial.print(F("ACK CMD Received unknown byte: 0x"));
