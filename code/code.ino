@@ -73,10 +73,8 @@ void setup() {
   // Check Camera Module
   uint8_t vid, pid;
   while (1) {
-#if DEBUG_MODE
     myCAM.rdSensorReg16_8(OV5642_CHIPID_HIGH, &vid);
     myCAM.rdSensorReg16_8(OV5642_CHIPID_LOW, &pid);
-#endif
     if ((vid != 0x56) || (pid != 0x42)) {
       Serial.println(F("ACK CMD Can't find OV5642 module! END"));
       delay(1000);
@@ -98,8 +96,9 @@ void setup() {
   // --- NEW: VSYNC Polarity Adjustment ---
   // If VSYNC pulses are being missed/inverted, toggle Bit 1 of Register 0x03
   uint8_t tim = myCAM.read_reg(0x03);
-  myCAM.write_reg(
-      0x03, tim | 0x02); // Force VSYNC Low Active (often needed for OV5642)
+  myCAM.write_reg(0x03,
+                  tim |
+                      0x02); // Force VSYNC Low Active (often needed for OV5642)
 
   Serial.println(F("ACK CMD Camera Ready! END"));
 }
