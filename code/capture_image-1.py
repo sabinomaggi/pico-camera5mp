@@ -12,6 +12,10 @@ TIMEOUT = 5  # Serial timeout in seconds
 # GLOBAL SETTINGS
 DEBUG = False  # Set to True to see all Pico diagnostic logs
 
+# Directory configuration
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+IMAGE_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'images'))
+
 def capture_image():
     # Ensure images directory exists
     if not os.path.exists(IMAGE_DIR):
