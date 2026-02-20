@@ -3,6 +3,9 @@
 #include <SPI.h>
 #include <Wire.h>
 
+// Debug mode: set to 1 to enable diagnostic prints and scans, 0 to disable
+#define DEBUG_MODE 0
+
 // Pin configuration for Pico 2W as specified by user
 const int CS = 5;
 
@@ -70,8 +73,10 @@ void setup() {
   // Check Camera Module
   uint8_t vid, pid;
   while (1) {
+#if DEBUG_MODE
     myCAM.rdSensorReg16_8(OV5642_CHIPID_HIGH, &vid);
     myCAM.rdSensorReg16_8(OV5642_CHIPID_LOW, &pid);
+#endif
     if ((vid != 0x56) || (pid != 0x42)) {
       Serial.println(F("ACK CMD Can't find OV5642 module! END"));
       delay(1000);
@@ -100,6 +105,7 @@ void setup() {
 }
 
 void loop() {
+#if DEBUG_MODE
   static unsigned long last_heartbeat = 0;
   if (millis() - last_heartbeat > 5000) {
     uint8_t rev = myCAM.read_reg(0x40);
@@ -113,6 +119,7 @@ void loop() {
     Serial.println(F(" END"));
     last_heartbeat = millis();
   }
+#endif
 
   if (Serial.available()) {
     uint8_t temp = Serial.read();
@@ -143,6 +150,7 @@ void capture_and_stream() {
   myCAM.wrSensorReg16_8(0x503D, 0x00); // Disable Test Pattern
   delay(10);
 
+#if DEBUG_MODE
   // --- NEW DEBUG: I2C Stability Check ---
   uint8_t vid = 0, pid = 0;
   myCAM.rdSensorReg16_8(OV5642_CHIPID_HIGH, &vid);
@@ -177,6 +185,7 @@ void capture_and_stream() {
   Serial.print(F("ACK CMD VSYNC Scan (10000 samples): "));
   Serial.print(vsync_count);
   Serial.println(F(" Highs END"));
+#endif
 
   // 1. Reset FIFO and Start bit
   myCAM.write_reg(ARDUCHIP_FIFO, 0x01); // Set Clear bit
@@ -191,11 +200,13 @@ void capture_and_stream() {
   // 2. Clear any lingering done bit
   myCAM.clear_fifo_flag();
 
+#if DEBUG_MODE
   // 3. Optional: Verify VSYNC is pulsing (Bit 0 of 0x41)
   uint8_t status = myCAM.read_reg(ARDUCHIP_TRIG);
   Serial.print(F("ACK CMD Pre-Capture Trig: 0x"));
   Serial.print(status, HEX);
   Serial.println(F(" END"));
+#endif
 
   // 4. Trigger Capture
   myCAM.start_capture();
@@ -209,12 +220,14 @@ void capture_and_stream() {
       return;
     }
 
+#if DEBUG_MODE
     if (millis() - last_status_update > 500) {
       Serial.print(F("ACK CMD Wait... Trig: 0x"));
       Serial.print(myCAM.read_reg(ARDUCHIP_TRIG), HEX);
       Serial.println(F(" END"));
       last_status_update = millis();
     }
+#endif
   }
   Serial.println(F("ACK CMD Capture Done. END"));
   delay(50); // Small wait for CPLD logic to settle

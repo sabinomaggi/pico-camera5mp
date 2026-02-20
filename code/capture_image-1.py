@@ -9,11 +9,8 @@ import datetime
 SERIAL_PORT = '/dev/cu.usbmodem22401'  # Updated to user's actual port
 BAUD_RATE = 115200
 TIMEOUT = 5  # Serial timeout in seconds
-CAPTURE_CMD = b'\x10'  # Command to trigger capture
-
-# Directory configuration
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMAGE_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'images'))
+# GLOBAL SETTINGS
+DEBUG = False  # Set to True to see all Pico diagnostic logs
 
 def capture_image():
     # Ensure images directory exists
@@ -25,16 +22,16 @@ def capture_image():
         print(f"Connecting to Pico on {SERIAL_PORT}...")
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2)
         
-        # Wait for Pico to initialize and print diagnostic logs
-        print("Waiting 15s for Pico to initialize...")
+        # Wait for Pico to initialize
+        wait_time = 15 if DEBUG else 5
+        print(f"Waiting {wait_time}s for Pico to initialize...")
         start_time = time.time()
-        wait_time = 15
         while time.time() - start_time < wait_time:
             if ser.in_waiting:
                 line = ser.readline().decode('utf-8', errors='ignore').strip()
-                if line: # Print all lines, not just "ACK"
+                if DEBUG and line:
                     print(f"Pico Boot: {line}")
-            time.sleep(0.1) # Keep a small sleep to prevent busy-waiting
+            time.sleep(0.1)
 
         ser.reset_input_buffer()
 
@@ -57,14 +54,14 @@ def capture_image():
             if line:
                 try:
                     text = line.decode('ascii', errors='ignore').strip()
-                    if text: print(f"Pico: {text}")
+                    if DEBUG and text: print(f"Pico: {text}")
                     if "ACK IMG END" in text:
                         found_header = True
                         break
                     if "ACK CMD ERROR" in text:
                         print(f"Pico reported error: {text}")
                         return
-                    if "ACK CMD Length:" in text:
+                    if DEBUG and "ACK CMD Length:" in text:
                         # Extract length just for info
                         try:
                             l = int(text.split(":")[1].split(" ")[1])
