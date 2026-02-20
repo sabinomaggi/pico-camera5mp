@@ -27,7 +27,7 @@ def capture_image():
         ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2)
         
         # Wait for Pico to initialize
-        wait_time = 15 if DEBUG else 5
+        wait_time = 15 if DEBUG else 8
         print(f"Waiting {wait_time}s for Pico to initialize...")
         start_time = time.time()
         while time.time() - start_time < wait_time:
@@ -93,7 +93,7 @@ def capture_image():
             img_bytes.append(byte[0])
             bytes_received += 1
             
-            if bytes_received % 10240 == 0:
+            if DEBUG and bytes_received % 10240 == 0:
                 print(f"Received {bytes_received // 1024} KB...")
 
             # Detect JPEG End Of Image (FF D9)
