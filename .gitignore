@@ -1,0 +1,8 @@
+.DS_Store
+images/*.jpg
+!images/capture_20260220_120353.jpg
+!images/capture_20260220_122152.jpg
+!images/capture_20260220_122441.jpg
+.venv/
+__pycache__/
+*.pyc
