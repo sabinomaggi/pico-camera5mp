@@ -2,87 +2,158 @@ import board
 import time
 import supervisor
 import sys
-from Arducam import Arducam, OV5642_2592x1944, OV5642_1600x1200
 
-import usb_cdc
+# Ensure all previously used buses are released before starting
+# This prevents "SPI Interface Error" or "Pin in use" on soft reboots
+try:
+    import displayio
+    displayio.release_displays()
+except ImportError:
+    pass
+
+import busio
+# Force release of any dangling locks
+board.SPI().deinit()
+board.I2C().deinit()
+
+SELECTED_RESOLUTION = OV5642_2592x1944
 
 # Initialize Camera
-cam = Arducam()
-cam.init_cam()
-# Set to 5MP by default
-cam.set_jpeg_size(OV5642_2592x1944)
+try:
+    time.sleep(1) # Give camera time to power up fully
+except KeyboardInterrupt:
+    pass
+
+try:
+    cam = Arducam()
+    
+    # --- Exact Arduino translate of setup() ---
+    # 1. Hardware Sensor Reset/Wake Sequence
+    cam.spi_write_reg(0x06, 0x00) # Reset + PWDN + PWROFF
+    time.sleep(0.05)
+    cam.spi_write_reg(0x06, 0x05) # Release Reset + PWREN ON
+    time.sleep(0.2)
+    
+    # 2. Check SPI
+    cam.spi_write_reg(0x00, 0x55)
+    temp = cam.spi_read_reg(0x00)
+    if temp != 0x55:
+        print("ACK CMD SPI interface Error! END")
+    else:
+        print("ACK CMD SPI interface OK. END")
+        
+    # 3. Check CPLD Revision
+    rev = cam.spi_read_reg(0x40)
+    print(f"ACK CMD CPLD Revision: 0x{rev:02X} END")
+    
+    # 4. Init format and size
+    cam._write_regs(OV5642_QVGA_Preview1)
+    cam._write_regs(OV5642_QVGA_Preview2)
+    time.sleep(0.1)
+    
+    cam.set_jpeg_size(SELECTED_RESOLUTION)
+    cam.clear_fifo_flag()
+    cam.spi_write_reg(0x01, 0x00) # 1 frame
+    
+    # VSYNC Polarity Adjustment (CRITICAL)
+    tim = cam.spi_read_reg(0x03)
+    cam.spi_write_reg(0x03, tim | 0x02)
+    print("ACK CMD Camera Ready! END")
+    
+except Exception as e:
+    print(f"Error initializing camera: {e}")
+    print("Re-plug the USB to hard reset!")
+    while True:
+        try:
+            time.sleep(1)
+        except KeyboardInterrupt:
+            pass
 
 print("CircuitPython Capture Ready!")
 
 def stream_image():
     # Signal start of capture to host
     print("ACK CMD Capture Started... END")
+    
+    # --- Non-Destructive Wakeup (MATCH ARDUINO) ---
+    cam.wrSensorReg16_8(0x3008, 0x00) # Ensure awake
+    cam.wrSensorReg16_8(0x503D, 0x00) # Disable Test Pattern
+    time.sleep(0.01)
+    
+    # 1. Reset FIFO and Start bit (MATCH ARDUINO EXACTLY)
+    cam.spi_write_reg(0x04, 0x01) # Set Clear bit
+    time.sleep(0.01)
+    cam.spi_write_reg(0x04, 0x00) # Release Clear bit
+    time.sleep(0.01)
+    cam.spi_write_reg(0x04, 0x10) # Reset Read Pointer
+    cam.spi_write_reg(0x04, 0x20) # Reset Write Pointer
+    time.sleep(0.01)
+    
     cam.clear_fifo_flag()
     cam.start_capture()
     
     start = time.monotonic()
+    last_status = 0
     while not (cam.spi_read_reg(0x41) & 0x08):
         if time.monotonic() - start > 5:
             print("ACK CMD ERROR: Capture Timeout END")
             return
-        time.sleep(0.1)
+        if time.monotonic() - last_status > 0.5:
+            last_status = time.monotonic()
+
+    print("ACK CMD Capture Done. END")
+    time.sleep(0.05) # Settle CPLD
         
     length = cam.get_fifo_length()
     print(f"ACK CMD Length: {length} END")
     
     if length == 0 or length >= 0x7FFFFF:
         print("ACK CMD ERROR: Bad image size END")
+        cam.clear_fifo_flag()
         return
 
-    # Signal start of image data stream
-    print("ACK IMG END")
+    # 8. SPI Readout (Match Arduino byte-by-byte search)
+    cam.spi_write_reg(0x04, 0x10) # Reset read pointer BEFORE SPI transaction
     
-    # Read and stream in chunks to avoid memory issues on Pico
-    chunk_size = 4096
-    remaining = length
+    # Signal start of image data stream using raw bytes
+    sys.stdout.buffer.write(b"ACK IMG END\n")
+    sys.stdout.buffer.flush()
     
-    # Proactive read pointer reset (FIX FROM ARDUINO)
-    cam.spi_write_reg(0x04, 0x10) 
+    # Burst command
+    while not cam.spi.try_lock():
+        pass
+    cam.spi_cs.value = False
+    cam.spi.write(bytes([0x3c]))
     
-    while remaining > 0:
-        to_read = min(remaining, chunk_size)
-        data = cam.read_fifo_burst(to_read)
-        sys.stdout.buffer.write(data)
-        remaining -= to_read
+    is_header = False
+    temp = 0
+    temp_last = 0
+    
+    for _ in range(length):
+        temp_last = temp
+        result = bytearray(1)
+        cam.spi.readinto(result)
+        temp = result[0]
+        
+        if is_header:
+            sys.stdout.buffer.write(bytes([temp]))
+        elif temp == 0xD8 and temp_last == 0xFF:
+            is_header = True
+            sys.stdout.buffer.write(bytes([temp_last, temp]))
+            
+        if temp == 0xD9 and temp_last == 0xFF:
+            break
+            
+    cam.spi_cs.value = True
+    cam.spi.unlock()
+    cam.clear_fifo_flag()
     
     sys.stdout.buffer.flush()
-    cam.clear_fifo_flag()
 
 # Main Loop
-# Instead of relying on the REPL (sys.stdin) which intercepts raw bytes,
-# we use a secondary hardware UART on the Pico for reliable control.
-# Connect your host to GP0 (TX) and GP1 (RX) via a USB-to-TTL adapter
-# OR use the secondary CDC interface if enabled in boot.py.
-# However, for simplicity without custom boot.py, we will try to use 
-# sys.stdin with a safer decoding approach: expecting a newline.
-# If the host script can send "\n" after the command, it works perfectly.
-
-# Let's try one more approach with sys.stdin: reading a full string.
-print("Listening for 'CAPTURE' command...")
+print("Auto-capture mode enabled. Taking a picture every 10 seconds...")
 
 while True:
-    # Use select or simpler blocking if supervisor fails
-    import select
-    
-    # Wait for input on stdin
-    r, w, e = select.select([sys.stdin], [], [], 0)
-    if r:
-        try:
-            cmd = sys.stdin.readline().strip()
-            print(f"DEBUG: Received command: '{cmd}'")
-            
-            if cmd == "CAPTURE" or cmd == "\x10": # Trigger capture
-                stream_image()
-            elif cmd == "INIT" or cmd == "\x11": # Re-init
-                print("ACK CMD Re-initializing Camera... END")
-                cam.init_cam()
-                cam.set_jpeg_size(OV5642_2592x1944)
-                print("ACK CMD Re-init Done. END")
-        except Exception as e:
-            print(f"DEBUG Error: {e}")
-    time.sleep(0.01)
+    time.sleep(10)
+    print("\n--- Auto Triggering Capture ---")
+    stream_image()
