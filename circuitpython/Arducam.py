@@ -35,9 +35,16 @@ class Arducam(object):
         
         # Reset CPLD
         self.spi_write_reg(0x07, 0x80)
-        utime.sleep(0.1)
+        try:
+            utime.sleep(0.1)
+        except KeyboardInterrupt:
+            pass
+            
         self.spi_write_reg(0x07, 0x00)
-        utime.sleep(0.1)
+        try:
+            utime.sleep(0.1)
+        except KeyboardInterrupt:
+            pass
 
     def spi_write_reg(self, address, value):
         while not self.spi.try_lock():
