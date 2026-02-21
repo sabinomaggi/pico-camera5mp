@@ -178,6 +178,9 @@ def stream_image():
 print("Auto-capture mode enabled. Taking a picture every 10 seconds...")
 
 while True:
-    time.sleep(10)
+    try:
+        time.sleep(10)
+    except KeyboardInterrupt:
+        pass
     print("\n--- Auto Triggering Capture ---")
     stream_image()
