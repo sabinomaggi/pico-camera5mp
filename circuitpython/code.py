@@ -14,6 +14,8 @@ except ImportError:
 import busio
 # Force release of any dangling locks from displayio (standard soft-reboot fix)
 
+from Arducam import Arducam, OV5642_2592x1944, OV5642_1600x1200
+
 SELECTED_RESOLUTION = OV5642_2592x1944
 
 # Initialize Camera
