@@ -35,16 +35,40 @@ try:
     time.sleep(0.2)
     
     # 2. Check SPI
-    cam.spi_write_reg(0x00, 0x55)
-    temp = cam.spi_read_reg(0x00)
-    if temp != 0x55:
-        print("ACK CMD SPI interface Error! END")
-    else:
-        print("ACK CMD SPI interface OK. END")
+    retry = 0
+    while True:
+        cam.spi_write_reg(0x00, 0x55)
+        temp = cam.spi_read_reg(0x00)
+        if temp == 0x55:
+            print("ACK CMD SPI interface OK. END")
+            break
+        retry += 1
+        if retry > 5:
+            print("ACK CMD SPI interface Error! END")
+            raise RuntimeError("SPI interface Error!")
+        time.sleep(0.5)
         
     # 3. Check CPLD Revision
     rev = cam.spi_read_reg(0x40)
     print(f"ACK CMD CPLD Revision: 0x{rev:02X} END")
+    
+    # 3b. Check Camera ID
+    retry = 0
+    while True:
+        try:
+            vid = cam.rdSensorReg16_8(0x300a)
+            pid = cam.rdSensorReg16_8(0x300b)
+            if vid == 0x56 and pid == 0x42:
+                print("ACK CMD OV5642 detected. END")
+                break
+        except Exception:
+            pass # Ignore I2C timeouts like [Errno 116] while sensor boots
+            
+        retry += 1
+        if retry > 5:
+            print("ACK CMD Can't find OV5642 module! END")
+            raise RuntimeError("OV5642 sensor unresponsive")
+        time.sleep(0.5)
     
     # 4. Init format and size
     cam._write_regs(OV5642_QVGA_Preview1)
