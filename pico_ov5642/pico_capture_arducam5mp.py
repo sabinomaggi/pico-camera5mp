@@ -24,31 +24,37 @@ def capture_image():
 
     try:
         print(f"Connecting to Pico on {SERIAL_PORT}...")
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2)
+        # CircuitPython often resets on DTR. Disable it to prevent reboot mid-connection.
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2, dsrdtr=False)
+        ser.dtr = False
+        ser.rts = False
         
-        # Wait for Pico to initialize
-        wait_time = 15 if DEBUG else 8
-        print(f"Waiting {wait_time}s for Pico to initialize...")
+        # Wait for Pico to initialize and signal Ready
+        print(f"Waiting for Pico to signal 'Camera Ready'...")
+        ready = False
         start_time = time.time()
-        while time.time() - start_time < wait_time:
+        while time.time() - start_time < 30: # 30s timeout
             if ser.in_waiting:
-                line = ser.readline().decode('utf-8', errors='ignore').strip()
-                if DEBUG and line:
-                    print(f"Pico Boot: {line}")
+                try:
+                    line = ser.readline().decode('utf-8', errors='ignore').strip()
+                    if line:
+                        print(f"Pico: {line}")
+                        if "ACK CMD Camera Ready!" in line:
+                            ready = True
+                            break
+                except: pass
             time.sleep(0.1)
 
+        if not ready:
+            print("Error: Pico never signaled Camera Ready.")
+            return
+
         ser.reset_input_buffer()
+        ser.reset_output_buffer()
 
-        # Optional: Send 0x11 to Re-Init if we missed the boot logs
-        # This command (0x11) can be used to re-initialize the camera
-        # and get fresh diagnostic output if needed.
-        # ser.write(b'\x11')
-        # time.sleep(2) # Give Pico time to process re-init
-
-        print("Triggering single capture ('CAPTURE\\n')...")
-        # In CircuitPython, the REPL often consumes raw bytes like \x10.
-        # Sending a plaintext string with a newline is much more reliable.
-        ser.write(b'CAPTURE\n')
+        print("Triggering capture (Byte 0x10)...")
+        ser.write(b'\x10')
+        ser.flush()
 
         # Wait for "ACK IMG END" header
         print("Waiting for image stream...")

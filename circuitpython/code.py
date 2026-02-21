@@ -182,21 +182,23 @@ def stream_image():
     sys.stdout.buffer.flush()
 
 # Main Loop
-print("CircuitPython Capture Ready! Waiting for 'CAPTURE' command...")
+print("ACK CMD Camera Ready! END")
+print("CircuitPython Capture Ready! Waiting for trigger (0x10)...")
+sys.stdout.flush()
 
 import supervisor
 
-cmd_buffer = ""
+# We only ARMOR the first 10 seconds of boot or specific delays
+# The main loop is EXPOSED so the user can hit Ctrl+C to stop the "nuke cycle"
+
 while True:
-    try:
-        if supervisor.runtime.serial_bytes_available:
-            cmd_buffer += sys.stdin.read(supervisor.runtime.serial_bytes_available)
-            if "CAPTURE" in cmd_buffer:
-                print("\n--- Interactive Triggering Capture ---")
-                cmd_buffer = "" # Clear buffer
-                stream_image()
-            elif len(cmd_buffer) > 64:
-                cmd_buffer = "" # Prevent memory overflow
-        time.sleep(0.01)
-    except KeyboardInterrupt:
-        pass
+    if supervisor.runtime.serial_bytes_available:
+        # Read raw byte
+        char = sys.stdin.read(1)
+        # We look for 0x10 (ASCII 16 / DLE) as our trigger
+        if char == "\x10":
+            print("\n--- Triggered Capture (0x10) ---")
+            stream_image()
+            print("\nCircuitPython Waiting for trigger (0x10)...")
+            sys.stdout.flush()
+    time.sleep(0.01)
