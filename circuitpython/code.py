@@ -12,9 +12,7 @@ except ImportError:
     pass
 
 import busio
-# Force release of any dangling locks
-board.SPI().deinit()
-board.I2C().deinit()
+# Force release of any dangling locks from displayio (standard soft-reboot fix)
 
 SELECTED_RESOLUTION = OV5642_2592x1944
 
