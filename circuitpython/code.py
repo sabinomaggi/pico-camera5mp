@@ -104,6 +104,13 @@ def stream_image():
     cam.wrSensorReg16_8(0x503D, 0x00) # Disable Test Pattern
     time.sleep(0.01)
     
+    # --- NEW DEBUG: VSYNC Scan ---
+    vsync_count = 0
+    for _ in range(1000):
+        if cam.spi_read_reg(0x41) & 0x01:
+            vsync_count += 1
+    print(f"ACK CMD VSYNC Scan (1000 samples): {vsync_count} Highs END")
+    
     # 1. Reset FIFO and Start bit (MATCH ARDUINO EXACTLY)
     cam.spi_write_reg(0x04, 0x01) # Set Clear bit
     time.sleep(0.01)
@@ -175,12 +182,21 @@ def stream_image():
     sys.stdout.buffer.flush()
 
 # Main Loop
-print("Auto-capture mode enabled. Taking a picture every 10 seconds...")
+print("CircuitPython Capture Ready! Waiting for 'CAPTURE' command...")
 
+import supervisor
+
+cmd_buffer = ""
 while True:
     try:
-        time.sleep(10)
+        if supervisor.runtime.serial_bytes_available:
+            cmd_buffer += sys.stdin.read(supervisor.runtime.serial_bytes_available)
+            if "CAPTURE" in cmd_buffer:
+                print("\n--- Interactive Triggering Capture ---")
+                cmd_buffer = "" # Clear buffer
+                stream_image()
+            elif len(cmd_buffer) > 64:
+                cmd_buffer = "" # Prevent memory overflow
+        time.sleep(0.01)
     except KeyboardInterrupt:
         pass
-    print("\n--- Auto Triggering Capture ---")
-    stream_image()
