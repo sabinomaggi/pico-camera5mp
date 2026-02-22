@@ -1,116 +1,150 @@
 import serial
+import serial.tools.list_ports
 import time
 import os
 import datetime
+import sys
 
-# CONFIGURATION
-# Update this port to match your Pico's serial port on macOS
-# Typically something like '/dev/cu.usbmodemXXXX'
-SERIAL_PORT = '/dev/cu.usbmodem22401'  # Updated to user's actual port
-BAUD_RATE = 115200
-TIMEOUT = 5  # Serial timeout in seconds
-# GLOBAL SETTINGS
-DEBUG = True  # Enabled to see Pico diagnostic logs
+# --- Configuration ---
+PORT = None # Set to None for Auto-Detection
+BAUD = 115200
+IMAGE_DIR = "images"
+DEBUG = False
 
-# Directory configuration
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-IMAGE_DIR = os.path.abspath(os.path.join(BASE_DIR, '..', 'images'))
+if not os.path.exists(IMAGE_DIR):
+    os.makedirs(IMAGE_DIR)
 
-def capture_image():
-    # Ensure images directory exists
-    if not os.path.exists(IMAGE_DIR):
-        print(f"Creating directory: {IMAGE_DIR}")
-        os.makedirs(IMAGE_DIR)
+def find_pico_port():
+    ports = list(serial.tools.list_ports.comports())
+    for p in ports:
+        desc = p.description.lower()
+        # Common identifiers for Pico / CircuitPython on Mac
+        if "pico" in desc or "circuitpython" in desc or "usbmodem" in desc:
+            return p.device
+    return None
 
-    try:
-        print(f"Connecting to Pico on {SERIAL_PORT}...")
-        # CircuitPython often resets on DTR. Disable it to prevent reboot mid-connection.
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=2, dsrdtr=False)
-        ser.dtr = False
-        ser.rts = False
+def connect_pico():
+    global PORT
+    target_port = PORT or find_pico_port()
+    
+    if not target_port:
+        print("Error: Could not find Pico serial port. Is it plugged in?")
+        return None
         
-        # Wait for Pico to initialize and signal Ready
-        print(f"Waiting for Pico to signal 'Camera Ready'...")
-        ready = False
-        start_time = time.time()
-        while time.time() - start_time < 30: # 30s timeout
-            if ser.in_waiting:
-                try:
-                    line = ser.readline().decode('utf-8', errors='ignore').strip()
-                    if line:
-                        print(f"Pico: {line}")
-                        if "ACK CMD Camera Ready!" in line:
-                            ready = True
-                            break
-                except: pass
-            time.sleep(0.1)
+    print(f"Connecting to Pico on {target_port}...")
+    try:
+        ser = serial.Serial(target_port, BAUD, timeout=1)
+        return ser
+    except Exception as e:
+        print(f"Error connecting to {target_port}: {e}")
+        return None
 
-        if not ready:
-            print("Error: Pico never signaled Camera Ready.")
-            return
+def main():
+    ser = connect_pico()
+    if not ser: return
 
-        ser.reset_input_buffer()
-        ser.reset_output_buffer()
+    print(f"Waiting for Pico to signal 'Camera Ready'...")
+    ser.reset_input_buffer()
+    
+    ready = False
+    start_time = time.time()
+    ser.timeout = 5
+    
+    while not ready:
+        line = ser.readline()
+        if not line:
+            if time.time() - start_time > 15:
+                print("Poking Pico (0x11)...")
+                ser.write(b'\x11')
+                start_time = time.time()
+            continue
+            
+        try:
+            text = line.decode('utf-8', errors='ignore').strip()
+            if text:
+                if any(x in text for x in ["ACK CMD", "Pico Status"]):
+                    print(f"Pico: {text}")
+            
+            if any(x in text for x in ["Camera Ready!", "Waiting for command"]):
+                ready = True
+        except:
+            pass
+    
+    ser.timeout = 1
 
+    while True:
+        print("\n" + "="*40)
+        user_input = input("Press [Enter] to capture, 's' for status, 'q' to quit: ").lower()
+        
+        if user_input == 'q':
+            break
+        elif user_input == 's':
+            ser.write(b'\x11')
+            continue
+
+        # Trigger
         print("Triggering capture (Byte 0x10)...")
+        ser.reset_input_buffer() # Clear any heartbeats
         ser.write(b'\x10')
         ser.flush()
-
-        # Wait for "ACK IMG END" header
-        print("Waiting for image stream...")
-        start_time = time.time()
-        found_header = False
         
-        while time.time() - start_time < 10:
-            line = ser.readline()
-            if line:
-                try:
-                    text = line.decode('ascii', errors='ignore').strip()
-                    if DEBUG and text: print(f"Pico: {text}")
-                    if "ACK IMG END" in text:
-                        found_header = True
-                        break
-                    if "ACK CMD ERROR" in text:
-                        print(f"Pico reported error: {text}")
-                        return
-                    if DEBUG and "ACK CMD Length:" in text:
-                        # Extract length just for info
-                        try:
-                            l = int(text.split(":")[1].split(" ")[1])
-                            print(f"Pico reports FIFO length: {l} bytes")
-                        except: pass
-                except:
-                    pass
+        ser.timeout = 10 
+        print("Waiting for Pico to process image...")
         
-        if not found_header:
-            print("Error: Did not receive 'ACK IMG END' from Pico.")
-            return
-
-        print("Receiving JPEG data... (searching for FF D8)")
+        # 1. Wait for ACK IMG END signal while printing Pico output
+        signal_buf = bytearray()
+        while True:
+            char = ser.read(1)
+            if not char: break
+            signal_buf.extend(char)
+            if b"ACK IMG END\n" in signal_buf:
+                break
+        
+        # Print all the "ACK CMD" status messages that were hidden
+        text = signal_buf.decode('utf-8', errors='ignore')
+        for line in text.strip().split("\n"):
+            if "ACK CMD" in line:
+                print(f"Pico: {line.strip()}")
+        
+        if b"ACK IMG END" not in signal_buf:
+            print(f"Error: Timed out waiting for image signal. Got: {text[:200]}")
+            continue
+            
+        print("Receiving JPEG bitstream...")
         img_bytes = bytearray()
-        last_byte = b''
-        bytes_received = 0
-        
-        # Long timeout for 5MP image transfer
+        found_start = False
         transfer_start = time.time()
-        while time.time() - transfer_start < 60:
-            byte = ser.read(1)
-            if not byte:
+        
+        # 2. Bulk Transfer Loop
+        while time.time() - transfer_start < 20: # 20s timeout for 5MP
+            # Read in large chunks for speed
+            chunk = ser.read(16384) 
+            if not chunk:
+                if found_start: break # End of stream
                 continue
             
-            img_bytes.append(byte[0])
-            bytes_received += 1
+            img_bytes.extend(chunk)
             
-            if DEBUG and bytes_received % 10240 == 0:
-                print(f"Received {bytes_received // 1024} KB...")
+            if not found_start:
+                # Seek for SOI in the accumulated data
+                soi_idx = img_bytes.find(b'\xff\xd8')
+                if soi_idx != -1:
+                    print(f"JPEG Header found at byte {soi_idx}!")
+                    img_bytes = img_bytes[soi_idx:]
+                    found_start = True
+            
+            if found_start:
+                if DEBUG: print(f"Buffered {len(img_bytes)//1024} KB...")
+                if b'\xff\xd9' in chunk:
+                    eoi_idx = img_bytes.find(b'\xff\xd9')
+                    if eoi_idx != -1:
+                        img_bytes = img_bytes[:eoi_idx+2]
+                        print("End of Image (EOI) detected.")
+                        break
+        
+        ser.timeout = 1
 
-            # Detect JPEG End Of Image (FF D9)
-            if last_byte == b'\xff' and byte == b'\xd9':
-                print(f"End of Image (EOI) detected after {bytes_received} bytes.")
-                break
-            last_byte = byte
-
-        if len(img_bytes) > 1000:
+        if len(img_bytes) > 20000: # 5MP JPEG should be > 20KB for a scene
             timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
             filename = f"img_{timestamp}.jpg"
             filepath = os.path.join(IMAGE_DIR, filename)
@@ -118,16 +152,18 @@ def capture_image():
             with open(filepath, 'wb') as f:
                 f.write(img_bytes)
             
-            print(f"Success! Image saved to: {filepath}")
+            print(f"\nSUCCESS")
+            print(f"Filename: {filename}")
             print(f"File size: {len(img_bytes)} bytes")
+            print(f"Location: {filepath}")
         else:
-            print(f"Error: Received only {len(img_bytes)} bytes. Image likely corrupt.")
+            if found_start:
+                print(f"Error: Received only {len(img_bytes)} bytes. Image likely truncated.")
+            else:
+                hex_head = " ".join([f"{b:02X}" for b in img_bytes[:32]])
+                print(f"Error: No JPEG header found in {len(img_bytes)} bytes received. (Start: {hex_head})")
 
-    except Exception as e:
-        print(f"Fatal Error: {e}")
-    finally:
-        if 'ser' in locals() and ser.is_open:
-            ser.close()
+    ser.close()
 
 if __name__ == "__main__":
-    capture_image()
+    main()
