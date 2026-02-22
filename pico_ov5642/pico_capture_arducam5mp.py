@@ -73,14 +73,15 @@ def main():
     ser.timeout = 1
 
     while True:
-        print("\n" + "="*40)
-        user_input = input("Press [Enter] to capture, 's' for status, 'q' to quit: ").lower()
-        
-        if user_input == 'q':
-            break
-        elif user_input == 's':
-            ser.write(b'\x11')
-            continue
+        if DEBUG:
+            print("\n" + "="*40)
+            user_input = input("Press [Enter] to capture, 's' for status, 'q' to quit: ").lower()
+            
+            if user_input == 'q':
+                break
+            elif user_input == 's':
+                ser.write(b'\x11')
+                continue
 
         # Trigger
         print("Triggering capture (Byte 0x10)...")
@@ -163,6 +164,9 @@ def main():
             else:
                 hex_head = " ".join([f"{b:02X}" for b in img_bytes[:32]])
                 print(f"Error: No JPEG header found in {len(img_bytes)} bytes received. (Start: {hex_head})")
+
+        if not DEBUG:
+            break # Exit after one automated capture
 
     ser.close()
 
