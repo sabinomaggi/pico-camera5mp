@@ -23,6 +23,7 @@ from OV5642_regs import (
 
 SELECTED_RESOLUTION = ov5642_2592x1944
 LOCKED_MODAL_BITS = 0x02 
+DEBUG = False # Set to True for verbose hex dumps and parity diagnostics 
 
 # Initialize Camera
 print("ACK CMD Booting System... END")
@@ -51,7 +52,7 @@ def sync_hardware():
     tim_base = cam.spi_read_reg(0x03) & ~0x0F
     
     for m in range(16):
-        sys.stdout.write(f"ACK CMD Mode 0x{m:02X}: Testing... END\n")
+        if DEBUG: sys.stdout.write(f"ACK CMD Mode 0x{m:02X}: Testing... END\n")
         cam.spi_write_reg(0x03, tim_base | m)
         time.sleep(0.01)
         
@@ -73,12 +74,13 @@ def sync_hardware():
         length = cam.get_fifo_length()
         if length > 1000:
             data = cam.read_fifo_burst(min(1024, length))
-            hex_head = " ".join([f"{b:02X}" for b in data[:16]])
-            sys.stdout.write(f"ACK CMD Mode 0x{m:02X}: Len={length}, Start=[{hex_head}] END\n")
+            if DEBUG:
+                hex_head = " ".join([f"{b:02X}" for b in data[:16]])
+                sys.stdout.write(f"ACK CMD Mode 0x{m:02X}: Len={length}, Start=[{hex_head}] END\n")
             
             label, idx = check_for_header(data)
             if label:
-                sys.stdout.write(f"ACK CMD VSYNC: Locked Mode 0x{m:02X} ({label}) END\n")
+                if DEBUG: sys.stdout.write(f"ACK CMD VSYNC: Locked Mode 0x{m:02X} ({label}) END\n")
                 LOCKED_MODAL_BITS = m
                 return True
         cam.reset_fifo()
@@ -143,8 +145,11 @@ def stream_image():
     label, soi_index = check_for_header(header_check)
             
     if soi_index == -1:
-        hex_head = " ".join([f"{b:02X}" for b in header_check[:48]])
-        print(f"ACK CMD ERROR: No Header (Start: {hex_head}) END")
+        if DEBUG:
+            hex_head = " ".join([f"{b:02X}" for b in header_check[:48]])
+            print(f"ACK CMD ERROR: No Header (Start: {hex_head}) END")
+        else:
+            print("ACK CMD ERROR: No valid JPEG Start of Image (SOI) found END")
         cam.reset_fifo()
         return
 

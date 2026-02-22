@@ -62,7 +62,7 @@ def main():
         try:
             text = line.decode('utf-8', errors='ignore').strip()
             if text:
-                if any(x in text for x in ["ACK CMD", "Pico Status"]):
+                if DEBUG and any(x in text for x in ["ACK CMD", "Pico Status"]):
                     print(f"Pico: {text}")
             
             if any(x in text for x in ["Camera Ready!", "Waiting for command"]):
@@ -100,11 +100,12 @@ def main():
             if b"ACK IMG END\n" in signal_buf:
                 break
         
-        # Print all the "ACK CMD" status messages that were hidden
+        # Print all the "ACK CMD" status messages that were hidden (only if DEBUG is true)
         text = signal_buf.decode('utf-8', errors='ignore')
-        for line in text.strip().split("\n"):
-            if "ACK CMD" in line:
-                print(f"Pico: {line.strip()}")
+        if DEBUG:
+            for line in text.strip().split("\n"):
+                if "ACK CMD" in line:
+                    print(f"Pico: {line.strip()}")
         
         if b"ACK IMG END" not in signal_buf:
             print(f"Error: Timed out waiting for image signal. Got: {text[:200]}")
