@@ -68,7 +68,7 @@ def sync_hardware():
                 break
             
         if not done:
-            sys.stdout.write(f"ACK CMD Mode 0x{m:02X}: No VSYNC END\n")
+            if DEBUG: sys.stdout.write(f"ACK CMD Mode 0x{m:02X}: No VSYNC END\n")
             continue
             
         length = cam.get_fifo_length()

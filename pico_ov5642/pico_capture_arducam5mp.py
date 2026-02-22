@@ -62,7 +62,7 @@ def main():
         try:
             text = line.decode('utf-8', errors='ignore').strip()
             if text:
-                if DEBUG and any(x in text for x in ["ACK CMD", "Pico Status"]):
+                if any(x in text for x in ["ACK CMD", "Pico Status"]):
                     print(f"Pico: {text}")
             
             if any(x in text for x in ["Camera Ready!", "Waiting for command"]):
