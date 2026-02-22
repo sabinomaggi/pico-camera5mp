@@ -17,7 +17,9 @@ except (ImportError, termios.error):
 # --- Configuration ---
 PORT = None # Set to None for Auto-Detection
 BAUD = 115200
-IMAGE_DIR = "images"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+IMAGE_DIR = os.path.join(PROJECT_DIR, "images")
 DEBUG = False
 
 if not os.path.exists(IMAGE_DIR):
