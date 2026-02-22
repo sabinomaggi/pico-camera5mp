@@ -3,8 +3,8 @@
 This project provides a robust solution for capturing high-resolution JPEG images (up to 5MP) from an **Arducam Mini 5MP Plus (B0068)** module using a **Raspberry Pi Pico 2** (RP2350) or **Raspberry Pi Pico** (RP2040).
 
 Two platform options are available:
-- **Arduino** (`main` branch): C++ firmware with a Python host script.
-- **CircuitPython** (`dev` branch): Pure Python driver running natively on the Pico, with a separate Python host script.
+- **Arduino**: C++ firmware with a Python host script.
+- **CircuitPython**: Pure Python driver running natively on the Pico, with a separate Python host script.
 
 ## Features
 - **Full 5MP Support**: Captured images at resolutions up to 2592x1944.
@@ -83,7 +83,7 @@ Supported constants include:
 ---
 
 ## CircuitPython (Alternative)
-A native CircuitPython port is available on the `dev` branch. This version allows you to control the camera using high-level Python code on the device, without needing the Arduino IDE.
+A native CircuitPython port is also included. This version allows you to control the camera using high-level Python code on the device, without needing the Arduino IDE.
 
 ### 1. Install Clean CircuitPython
 Install CircuitPython using the standard official build:
@@ -94,8 +94,7 @@ Install CircuitPython using the standard official build:
 5.  Select your target board and the latest stable version. Click **Install**.
 
 ### 2. Deploy Driver
-1.  Clone this repository and switch to the development branch: `git checkout dev`.
-2.  Copy the following files from the `circuitpython/` directory to the `CIRCUITPY` drive:
+1.  Copy the following files from the `circuitpython/` directory to the `CIRCUITPY` drive:
     -   `Arducam.py`
     -   `OV5642_regs.py`
     -   `code.py`
@@ -118,7 +117,7 @@ project12-pico-camera5mp/
 │   ├── ArduCAM.cpp / .h      # Arducam driver (C++)
 │   ├── pico_ov5642.ino       # Arduino sketch
 │   └── capture.py            # Host capture script (Arduino)
-├── circuitpython/            # CircuitPython platform (dev branch)
+├── circuitpython/            # CircuitPython platform
 │   ├── Arducam.py            # Arducam driver (Python)
 │   ├── OV5642_regs.py        # Register definitions
 │   ├── code.py               # Pico-side capture logic
