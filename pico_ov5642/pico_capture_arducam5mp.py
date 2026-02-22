@@ -4,6 +4,15 @@ import time
 import os
 import datetime
 import sys
+import atexit
+
+# Save terminal settings before pyserial can corrupt them (macOS stty bug)
+try:
+    import termios
+    _saved_tty = termios.tcgetattr(sys.stdin)
+    atexit.register(termios.tcsetattr, sys.stdin, termios.TCSADRAIN, _saved_tty)
+except (ImportError, termios.error):
+    pass  # Not a TTY or not on Unix
 
 # --- Configuration ---
 PORT = None # Set to None for Auto-Detection
@@ -169,6 +178,11 @@ def main():
             break # Exit after one automated capture
 
     ser.close()
+    # Restore terminal settings after serial port is closed
+    try:
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, _saved_tty)
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     main()
