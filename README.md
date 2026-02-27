@@ -131,3 +131,6 @@ This codebase was generated with the assistance of **Gemini** (Google) and **Cla
 ## Useful Links
 - **Official Camera Page**: [Arducam 5MP Plus SPI Camera](https://www.arducam.com/arducam-5mp-plus-spi-cam-arduino-ov5642.html)
 - **Official Documentation**: [Arducam 5MP Plus Manual](https://www.uctronics.com/download/Amazon/B0067-B0068-Pico.pdf)
+
+## License
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
